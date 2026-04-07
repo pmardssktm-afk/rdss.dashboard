@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RDSS Kottayam — Live Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#09111f; --surface:#0f1c2e; --surface2:#162236;
+  --border:#1b2e46; --border2:#243650;
+  --amber:#f59e0b; --amber2:#fbbf24; --amber-dim:rgba(245,158,11,.10);
+  --green:#10b981; --green-dim:rgba(16,185,129,.10);
+  --red:#ef4444;   --red-dim:rgba(239,68,68,.10);
+  --blue:#3b82f6;  --blue-dim:rgba(59,130,246,.10);
+  --purple:#8b5cf6;--purple-dim:rgba(139,92,246,.10);
+  --text:#dde7f2; --text-dim:#7a96b8; --text-muted:#3d5872;
+  --grid:rgba(255,255,255,.025);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(0deg,var(--grid) 0,var(--grid) 1px,transparent 1px,transparent 44px),
+             repeating-linear-gradient(90deg,var(--grid) 0,var(--grid) 1px,transparent 1px,transparent 44px);}
+
+/* LAYOUT */
+.layout{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh;}
+
+/* HEADER */
+.header{background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:62px;flex-shrink:0;}
+.hbrand{display:flex;align-items:center;gap:12px;}
+.hicon{width:40px;height:40px;border-radius:8px;background:var(--amber-dim);border:1px solid rgba(245,158,11,.3);
+  display:flex;align-items:center;justify-content:center;font-size:20px;}
+.htitle{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:#fff;}
+.hsub{font-size:10px;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;letter-spacing:.8px;}
+.hright{display:flex;align-items:center;gap:10px;}
+.pill{display:inline-flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;
+  font-size:10px;padding:4px 10px;border-radius:20px;letter-spacing:.5px;}
+.p-amber{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(245,158,11,.25);}
+.p-green{background:var(--green-dim);color:var(--green);border:1px solid rgba(16,185,129,.25);}
+.p-blue {background:var(--blue-dim); color:var(--blue); border:1px solid rgba(59,130,246,.25);}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* REFRESH BTN */
+.refresh-btn{background:var(--amber-dim);border:1px solid rgba(245,158,11,.3);color:var(--amber);
+  border-radius:8px;padding:6px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;
+  cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .2s;}
+.refresh-btn:hover{background:rgba(245,158,11,.18);}
+.refresh-btn.loading .ri{animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ri{display:inline-block;font-style:normal;}
+
+/* TABBAR */
+.tabbar{background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;padding:0 28px;gap:4px;flex-shrink:0;}
+.tab{padding:12px 18px 10px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.8px;
+  text-transform:uppercase;color:var(--text-muted);border:none;background:transparent;cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;
+  display:flex;align-items:center;gap:7px;}
+.tab:hover{color:var(--text-dim);}
+.tab.active{color:var(--amber);border-bottom-color:var(--amber);}
+
+/* CONTENT */
+.content{flex:1;overflow-y:auto;padding:24px 28px 40px;}
+.tab-panel{display:none;} .tab-panel.active{display:block;}
+
+/* SECTION HEAD */
+.sh{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:2.5px;text-transform:uppercase;
+  color:var(--amber);margin:26px 0 12px;display:flex;align-items:center;gap:10px;}
+.sh::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border2),transparent);}
+.sh:first-child{margin-top:0;}
+
+/* UPDATE BAR */
+.update-bar{display:flex;align-items:center;gap:10px;margin-bottom:18px;
+  padding:9px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
+.update-label{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-muted);}
+.update-val{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--amber);}
+.update-status{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;}
+.status-live{color:var(--green);}
+.status-offline{color:var(--amber);}
+
+/* KPI GRID */
+.kg{display:grid;gap:12px;margin-bottom:12px;}
+.kg6{grid-template-columns:repeat(6,1fr);}
+.kg4{grid-template-columns:repeat(4,1fr);}
+.kg3{grid-template-columns:repeat(3,1fr);}
+.kg2{grid-template-columns:repeat(2,1fr);}
+
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:18px 16px 14px;position:relative;overflow:hidden;transition:border-color .18s,transform .18s;}
+.kpi:hover{border-color:var(--border2);transform:translateY(-2px);}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--ac,var(--amber));}
+.ki{font-size:18px;margin-bottom:10px;line-height:1;}
+.kv{font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;color:var(--ac,var(--amber));line-height:1;}
+.kv sup{font-size:15px;font-weight:500;}
+.kl{font-size:11.5px;color:var(--text-dim);margin-top:5px;line-height:1.35;}
+.ks{font-size:10px;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;margin-top:3px;}
+.kb{margin-top:10px;}
+.kbt{background:var(--bg);border-radius:3px;height:4px;overflow:hidden;}
+.kbf{height:100%;border-radius:3px;background:var(--ac,var(--amber));transition:width 1.3s cubic-bezier(.4,0,.2,1);}
+.kbfoot{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-muted);margin-top:3px;}
+
+/* CARD */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;}
+.chd{padding:14px 18px 12px;border-bottom:1px solid var(--border);font-family:'Rajdhani',sans-serif;
+  font-size:14px;font-weight:600;color:#fff;display:flex;align-items:center;gap:7px;}
+.cbody{padding:18px;}
+
+/* COLS */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+
+/* PROGRESS BARS */
+.pb{margin-bottom:14px;} .pb:last-child{margin-bottom:0;}
+.pbm{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+.pbn{font-size:12px;color:var(--text-dim);}
+.pbv{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);}
+.pbv b{color:var(--text);}
+.pbt{background:var(--bg);border-radius:4px;height:8px;overflow:hidden;}
+.pbf{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--c1,var(--amber)),var(--c2,var(--amber2)));transition:width 1.4s cubic-bezier(.4,0,.2,1);}
+.pbfoot{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-muted);margin-top:2px;}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--text-muted);padding:0 12px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+.tbl th.r{text-align:right;}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text-dim);font-size:12.5px;vertical-align:middle;}
+.tbl td.r{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tbody tr:hover td{background:rgba(255,255,255,.02);color:var(--text);}
+.tbl tr.total td{color:var(--amber);background:rgba(245,158,11,.04);font-weight:600;}
+.mono{font-family:'IBM Plex Mono',monospace;font-size:12px;}
+.va{color:var(--amber);} .vg{color:var(--green);} .vr{color:var(--red);} .vb{color:var(--blue);} .vm{color:var(--text-muted);}
+
+/* CHIPS */
+.chip{display:inline-flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;
+  font-size:10px;padding:3px 8px;border-radius:20px;white-space:nowrap;}
+.cg{background:var(--green-dim);color:var(--green);}
+.ca{background:var(--amber-dim);color:var(--amber);}
+.cr{background:var(--red-dim);color:var(--red);}
+.cb{background:var(--blue-dim);color:var(--blue);}
+.cm{background:rgba(255,255,255,.05);color:var(--text-muted);}
+
+.dtag{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:3px;text-transform:uppercase;}
+.dch{background:rgba(59,130,246,.15);color:#60a5fa;}
+.dpa{background:rgba(16,185,129,.15);color:#34d399;}
+.dva{background:rgba(245,158,11,.15);color:#fbbf24;}
+
+/* CONTRACTOR */
+.contractor{background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:18px;position:relative;overflow:hidden;}
+.contractor::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--cc,var(--amber));opacity:.6;}
+.ccpkg{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--text-muted);margin-bottom:4px;}
+.ccname{font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:700;color:#fff;margin-bottom:3px;}
+.ccdesc{font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:14px;}
+.ccstats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.ccstat{background:var(--bg);border-radius:8px;padding:10px;}
+.ccval{font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--cc,var(--amber));line-height:1;}
+.cclbl{font-size:9px;color:var(--text-muted);margin-top:3px;}
+
+/* ANIM */
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.kpi,.card,.contractor{animation:fadeUp .4s ease both;}
+
+/* SETTINGS */
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:12px;}
+.slbl{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px;}
+.sinput{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);
+  font-family:'IBM Plex Mono',monospace;font-size:12px;padding:10px 12px;outline:none;transition:border-color .2s;margin-bottom:10px;}
+.sinput:focus{border-color:var(--amber);}
+.sbtn{background:var(--amber);color:#000;border:none;border-radius:8px;padding:10px 20px;
+  font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;cursor:pointer;}
+.sbtn:hover{background:var(--amber2);}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- HEADER -->
+<div class="header">
+  <div class="hbrand">
+    <div class="hicon">⚡</div>
+    <div>
+      <div class="htitle">RDSS Kottayam — Live Progress Dashboard</div>
+      <div class="hsub">KSEB LTD · KOTTAYAM CIRCLE · REVAMPED DISTRIBUTION SECTOR SCHEME</div>
+    </div>
+  </div>
+  <div class="hright">
+    <span class="pill p-blue">P-3 Regional · VTL</span>
+    <span class="pill p-green">PKG-1 · Genisys</span>
+    <span class="pill p-amber">PKG-3 · Manipal</span>
+    <button class="refresh-btn" onclick="refreshData()" id="rbtn">
+      <i class="ri" id="ri">↺</i> <span id="rlbl">Refresh Live Data</span>
+    </button>
+  </div>
+</div>
+
+<!-- TABBAR -->
+<div class="tabbar">
+  <button class="tab active" onclick="showTab('home',this)">🏠 Home</button>
+  <button class="tab" onclick="showTab('physical',this)">🏗️ Physical Progress</button>
+  <button class="tab" onclick="showTab('financial',this)">💹 Financial</button>
+  <button class="tab" onclick="showTab('works',this)">✅ Works Status</button>
+  <button class="tab" onclick="showTab('settings',this)">⚙️ Settings</button>
+</div>
+
+<!-- CONTENT -->
+<div class="content" id="content">
+
+<!-- ══ HOME ══ -->
+<div class="tab-panel active" id="tab-home">
+
+  <div class="update-bar">
+    <span class="update-label">Last updated:</span>
+    <span class="update-val" id="upd-time">06 Apr 2026 (from Google Sheet)</span>
+    <span class="update-status status-live" id="upd-status"><span class="dot"></span> &nbsp;LIVE</span>
+  </div>
+
+  <div class="sh">Key Performance Indicators — VTL Regional Package (P-3)</div>
+  <div class="kg kg6">
+    <div class="kpi" style="--ac:var(--amber)">
+      <div class="ki">🏗️</div>
+      <div class="kv" id="kv-poles">225</div>
+      <div class="kl">Total Poles Erected</div>
+      <div class="ks" id="ks-poles">8m: 80 &nbsp;|&nbsp; 9m: 145</div>
+      <div class="kb"><div class="kbt"><div class="kbf" id="kb-poles" style="width:2.5%"></div></div>
+      <div class="kbfoot"><span id="kbf-poles">2.5%</span><span>Survey: 9,202</span></div></div>
+    </div>
+    <div class="kpi" style="--ac:var(--blue)">
+      <div class="ki">💰</div>
+      <div class="kv" id="kv-supply">₹20.84<sup>Cr</sup></div>
+      <div class="kl">Supply Invoice Raised</div>
+      <div class="ks" id="ks-supply">23 Invoices submitted</div>
+      <div class="kb"><div class="kbt"><div class="kbf" id="kb-supply" style="width:36.29%;background:var(--blue)"></div></div>
+      <div class="kbfoot"><span id="kbf-supply">36.29%</span><span>of ₹57.43 Cr</span></div></div>
+    </div>
+    <div class="kpi" style="--ac:var(--green)">
+      <div class="ki">⚙️</div>
+      <div class="kv" id="kv-erection">2.73<sup>%</sup></div>
+      <div class="kl">Erection Progress</div>
+      <div class="ks" id="ks-erection">vs total LOI value</div>
+      <div class="kb"><div class="kbt"><div class="kbf" id="kb-erection" style="width:2.73%;background:var(--green)"></div></div>
+      <div class="kbfoot"><span id="kbf-erection">2.73%</span><span>97.27% pending</span></div></div>
+    </div>
+    <div class="kpi" style="--ac:var(--purple)">
+      <div class="ki">🔌</div>
+      <div class="kv" id="kv-dtr">9</div>
+      <div class="kl">DTRs Enhanced</div>
+      <div class="ks" id="ks-dtr">100→160kVA: 6 | Others: 3</div>
+      <div class="kb"><div class="kbt"><div class="kbf" id="kb-dtr" style="width:14.3%;background:var(--purple)"></div></div>
+      <div class="kbfoot"><span id="kbf-dtr">14.3%</span><span>of 63 target</span></div></div>
+    </div>
+    <div class="kpi" style="--ac:var(--red)">
+      <div class="ki">📏</div>
+      <div class="kv" id="kv-line">10.95<sup>km</sup></div>
+      <div class="kl">Line Work Done</div>
+      <div class="ks" id="ks-line">HT ABC: 10.75 km | LT ABC: 3.16 km</div>
+      <div class="kb"><div class="kbt"><div class="kbf" id="kb-line" style="width:2.18%;background:var(--red)"></div></div>
+      <div class="kbfoot"><span id="kbf-line">2.18%</span><span>of 503 km</span></div></div>
+    </div>
+    <div class="kpi" style="--ac:var(--green)">
+      <div class="ki">✅</div>
+      <div class="kv">47</div>
+      <div class="kl">Genisys Works Done</div>
+      <div class="ks">PKG-1 · 100% complete</div>
+      <div class="kb"><div class="kbt"><div class="kbf" style="width:100%;background:var(--green)"></div></div>
+      <div class="kbfoot"><span>100%</span><span>47 / 47</span></div></div>
+    </div>
+  </div>
+
+  <div class="sh">Phase 1 — Package & Division Wise Overview</div>
+  <div class="card">
+    <div class="chd">📊 P2-15 (Genisys) &amp; P2-16 (Manipal) — Pole &amp; Line Summary</div>
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Metric</th><th>Package</th>
+          <th class="r">Chsry (HT ABC New)</th>
+          <th class="r">Chsry (HT ABC RC)</th>
+          <th class="r">Pallom (HT ABC)</th>
+          <th class="r">Pallom (HT CC)</th>
+          <th class="r">Vaikom (HT ABC)</th>
+          <th class="r">Vaikom (HT CC)</th>
+          <th class="r">Manipal Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td rowspan="2"><b>Poles (nos)<br><span class="vm" style="font-size:10px">Total / Erected</span></b></td>
+          <td><span class="chip cb">Genisys</span></td>
+          <td class="r mono va">739 / 739</td>
+          <td class="r mono va">27 / 27</td>
+          <td class="r mono vm">—</td><td class="r mono vm">—</td><td class="r mono vm">—</td><td class="r mono vm">—</td>
+          <td class="r mono vm">—</td>
+        </tr>
+        <tr>
+          <td><span class="chip cg">Manipal</span></td>
+          <td class="r mono vm">—</td><td class="r mono vm">—</td>
+          <td class="r mono va">369 / 364</td>
+          <td class="r mono va">9 / 9</td>
+          <td class="r mono va">416 / 413</td>
+          <td class="r mono va">2 / 2</td>
+          <td class="r mono va">796 / 788</td>
+        </tr>
+        <tr>
+          <td rowspan="2"><b>Line (m)<br><span class="vm" style="font-size:10px">Total / Stringed</span></b></td>
+          <td><span class="chip cb">Genisys</span></td>
+          <td class="r mono va">41,480 / 41,480</td>
+          <td class="r mono va">1,744 / 1,744</td>
+          <td class="r mono vm">—</td><td class="r mono vm">—</td><td class="r mono vm">—</td><td class="r mono vm">—</td>
+          <td class="r mono vm">—</td>
+        </tr>
+        <tr>
+          <td><span class="chip cg">Manipal</span></td>
+          <td class="r mono vm">—</td><td class="r mono vm">—</td>
+          <td class="r mono va">9,762 / 9,762</td>
+          <td class="r mono va">868 / 868</td>
+          <td class="r mono va">15,181 / 15,181</td>
+          <td class="r mono va">851 / 851</td>
+          <td class="r mono va">24,943 / 24,943</td>
+        </tr>
+        <tr class="total">
+          <td colspan="2"><b>Progress</b></td>
+          <td class="r mono">100%</td>
+          <td class="r mono">100%</td>
+          <td class="r mono">99.3%</td>
+          <td class="r mono">100%</td>
+          <td class="r mono">99.6%</td>
+          <td class="r mono">100%</td>
+          <td class="r mono">99.5%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sh">Contractor Overview</div>
+  <div class="three">
+    <div class="contractor" style="--cc:var(--blue)">
+      <div class="ccpkg">PKG-1 (P2-15) · NOA: 06-May-2024</div>
+      <div class="ccname">Genisys Engineers & Contractors</div>
+      <div class="ccdesc">Survey ✓ &nbsp;|&nbsp; Agreement ✓ (05-Oct-2024)<br>Work commenced: 04-Dec-2024<br>Changanassery, Karukachal, Manimala, Pathanad, Thengana, Thrikkodithanam, Kurichy</div>
+      <div class="ccstats">
+        <div class="ccstat"><div class="ccval" style="color:var(--blue)">47/47</div><div class="cclbl">Works Complete</div></div>
+        <div class="ccstat"><div class="ccval" style="color:var(--blue)">100%</div><div class="cclbl">Completion Rate</div></div>
+        <div class="ccstat"><div class="ccval" style="color:var(--blue)">766</div><div class="cclbl">PSC + A Poles</div></div>
+        <div class="ccstat"><div class="ccval" style="color:var(--blue)">43,224m</div><div class="cclbl">Line Stringed</div></div>
+      </div>
+    </div>
+    <div class="contractor" style="--cc:var(--green)">
+      <div class="ccpkg">PKG-3 (P2-16) · NOA: 24-Jan-2024</div>
+      <div class="ccname">Manipal Energy & Infratech Ltd</div>
+      <div class="ccdesc">Survey ✓ &nbsp;|&nbsp; Agreement ✓ (09-Oct-2024)<br>Pallom: Ayarkunnam, GandhiNagar, Puthupally, Meenadom, Punja<br>Vaikom: Ettumanoor, Peruva, Chembu, Neendoor, Kuruvilangad, Thalayazham</div>
+      <div class="ccstats">
+        <div class="ccstat"><div class="ccval" style="color:var(--green)">25</div><div class="cclbl">Works Done</div></div>
+        <div class="ccstat"><div class="ccval" style="color:var(--amber)">6</div><div class="cclbl">Pending</div></div>
+        <div class="ccstat"><div class="ccval" style="color:var(--green)">788</div><div class="cclbl">Poles Erected</div></div>
+        <div class="ccstat"><div class="ccval" style="color:var(--green)">26,662m</div><div class="cclbl">Line Stringed</div></div>
+      </div>
+    </div>
+    <div class="contractor" style="--cc:var(--amber)">
+      <div class="ccpkg">P-3 Regional · Vindhya Telelinks</div>
+      <div class="ccname">Vindhya Telelinks Ltd (VTL)</div>
+      <div class="ccdesc">Regional Package · Supply + Erection<br>Sections: Manimala, Thengana, Karukachal, Meenedom, Ettumanoor, Neendoor<br>Total Works: 212 &nbsp;|&nbsp; Work Started: 6 Sections</div>
+      <div class="ccstats">
+        <div class="ccstat"><div class="ccval" id="cc-poles">225</div><div class="cclbl">Poles Erected</div></div>
+        <div class="ccstat"><div class="ccval" id="cc-supply">36.29%</div><div class="cclbl">Supply Progress</div></div>
+        <div class="ccstat"><div class="ccval">₹4.16Cr</div><div class="cclbl">Mob. Advance</div></div>
+        <div class="ccstat"><div class="ccval">23</div><div class="cclbl">Invoices Raised</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sh">Package Registration — Kottayam Circle</div>
+  <div class="card">
+    <div class="chd">📋 RDSS Distribution Packages</div>
+    <table class="tbl">
+      <thead><tr><th>Package</th><th>Contractor</th><th>NOA Date</th><th>Survey</th><th>Agreement</th><th>Work Status</th><th class="r">NOA Value (₹)</th></tr></thead>
+      <tbody>
+        <tr><td><b class="vb">PKG-1</b></td><td>Genisys Engineers & Contractors</td><td class="mono">06-May-2024</td><td><span class="chip cg">✓ Done</span></td><td><span class="chip cg">✓ 05-Oct-2024</span></td><td style="font-size:12px">Pole erection & stringing 100% complete</td><td class="r va mono">10,57,29,315</td></tr>
+        <tr><td><b class="vg">PKG-3</b></td><td>Manipal Energy & Infratech Ltd</td><td class="mono">24-Jan-2024</td><td><span class="chip cg">✓ Done</span></td><td><span class="chip cg">✓ 09-Oct-2024</span></td><td style="font-size:12px">25/31 works done; materials delivery ongoing</td><td class="r va mono">5,19,35,646</td></tr>
+        <tr><td><b class="va">P-3 VTL</b></td><td>Vindhya Telelinks Ltd</td><td class="mono">Regional</td><td><span class="chip cg">✓ Done</span></td><td><span class="chip cg">✓ Executed</span></td><td style="font-size:12px" id="vtl-status">Supply 36.29% · Erection 2.73% · 6 Sections active</td><td class="r vm mono">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /home -->
+
+<!-- ══ PHYSICAL ══ -->
+<div class="tab-panel" id="tab-physical">
+
+  <div class="sh">Poles Erected — VTL Regional Package (Section Wise)</div>
+  <div class="card">
+    <div class="chd">🏗️ Pole Progress</div>
+    <table class="tbl">
+      <thead><tr><th>Division</th><th>Section</th><th class="r">8m PSC</th><th class="r">9m PSC</th><th class="r">A-Pole 11m</th><th class="r">A-Pole 12m</th><th class="r">Subtotal</th></tr></thead>
+      <tbody>
+        <tr><td><span class="dtag dch">Changanacherry</span></td><td>Manimala</td><td class="r va mono">36</td><td class="r va mono">26</td><td class="r vm mono">—</td><td class="r vm mono">—</td><td class="r mono">62</td></tr>
+        <tr><td></td><td>Thengana</td><td class="r va mono">2</td><td class="r va mono">39</td><td class="r vm mono">—</td><td class="r vm mono">—</td><td class="r mono">41</td></tr>
+        <tr><td></td><td>Karukachal</td><td class="r va mono">38</td><td class="r va mono">25</td><td class="r mono">0</td><td class="r mono">0</td><td class="r mono">63</td></tr>
+        <tr><td><span class="dtag dpa">Pallom</span></td><td>Meenedom</td><td class="r va mono">2</td><td class="r va mono">2</td><td class="r vm mono">—</td><td class="r vm mono">—</td><td class="r mono">4</td></tr>
+        <tr><td><span class="dtag dva">Vaikom</span></td><td>Ettumanoor</td><td class="r va mono">2</td><td class="r va mono">2</td><td class="r vm mono">—</td><td class="r vm mono">—</td><td class="r mono">4</td></tr>
+        <tr><td></td><td>Neendoor</td><td class="r vm mono">0</td><td class="r va mono">51</td><td class="r vm mono">—</td><td class="r vm mono">—</td><td class="r mono">51</td></tr>
+        <tr class="total"><td colspan="2"><b>TOTAL VTL</b></td><td class="r mono"><b id="tp-8m">80</b></td><td class="r mono"><b id="tp-9m">145</b></td><td class="r mono"><b>0</b></td><td class="r mono"><b>0</b></td><td class="r mono"><b id="tp-total">225</b></td></tr>
+        <tr><td colspan="2" class="vm" style="font-size:11px">Survey Target</td><td class="r mono vm">7,281</td><td class="r mono vm">1,921</td><td class="r mono vm">109</td><td class="r mono vm">67</td><td class="r mono vm">9,378</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <div class="chd">📡 Line Work Progress (km)</div>
+      <div class="cbody">
+        <div class="pb"><div class="pbm"><span class="pbn">NEW HT ABC 150 sq mm</span><span class="pbv"><b>0.55</b> / 35.18 km</span></div><div class="pbt"><div class="pbf" style="--c1:var(--blue);--c2:#60a5fa;width:1.56%"></div></div><div class="pbfoot">1.56%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">RC HT ABC 120 sq mm</span><span class="pbv"><b id="pb-rchtabc">10.20</b> / 15.87 km</span></div><div class="pbt"><div class="pbf" id="pbf-rchtabc" style="--c1:var(--purple);--c2:#a78bfa;width:64.3%"></div></div><div class="pbfoot" id="pbfoot-rchtabc">64.3%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">RC CC (ACSR 99 sq mm)</span><span class="pbv"><b>0.00</b> / 2.99 km</span></div><div class="pbt"><div class="pbf" style="--c1:#4b5563;--c2:#6b7280;width:0%"></div></div><div class="pbfoot">0%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">NEW LT ABC 95 sq mm</span><span class="pbv"><b>0.00</b> / 9.52 km</span></div><div class="pbt"><div class="pbf" style="--c1:#4b5563;--c2:#6b7280;width:0%"></div></div><div class="pbfoot">0%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">RC LT ABC 95 sq mm</span><span class="pbv"><b>3.16</b> / 438.75 km</span></div><div class="pbt"><div class="pbf" style="--c1:var(--amber);--c2:var(--amber2);width:0.72%"></div></div><div class="pbfoot">0.72%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">Conversion LT ABC 95 sq mm</span><span class="pbv"><b>0.00</b> / 0.95 km</span></div><div class="pbt"><div class="pbf" style="--c1:#4b5563;--c2:#6b7280;width:0%"></div></div><div class="pbfoot">0%</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="chd">🔌 Transformer Enhancement (nos)</div>
+      <div class="cbody">
+        <div class="pb"><div class="pbm"><span class="pbn">25 kVA → 100 kVA</span><span class="pbv"><b>2</b> / 4 nos</span></div><div class="pbt"><div class="pbf" style="--c1:var(--green);--c2:#34d399;width:50%"></div></div><div class="pbfoot">50%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">63 kVA → 100 kVA</span><span class="pbv"><b>1</b> / 9 nos</span></div><div class="pbt"><div class="pbf" style="--c1:var(--green);--c2:#34d399;width:11.1%"></div></div><div class="pbfoot">11.1%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">100 kVA → 160 kVA</span><span class="pbv"><b>6</b> / 17 nos</span></div><div class="pbt"><div class="pbf" style="--c1:var(--amber);--c2:var(--amber2);width:35.3%"></div></div><div class="pbfoot">35.3%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">160 kVA → 250 kVA</span><span class="pbv"><b>0</b> / 4 nos</span></div><div class="pbt"><div class="pbf" style="--c1:#4b5563;--c2:#6b7280;width:0%"></div></div><div class="pbfoot">0%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">New DTR 16 kVA (HVDS)</span><span class="pbv"><b>0</b> / 9 nos</span></div><div class="pbt"><div class="pbf" style="--c1:#4b5563;--c2:#6b7280;width:0%"></div></div><div class="pbfoot">0%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">New DTR 100 kVA</span><span class="pbv"><b>1</b> / 28 nos</span></div><div class="pbt"><div class="pbf" style="--c1:var(--blue);--c2:#60a5fa;width:3.57%"></div></div><div class="pbfoot">3.57%</div></div>
+        <div class="pb"><div class="pbm"><span class="pbn">DTR Uplifting</span><span class="pbv"><b>0</b> / 28 nos</span></div><div class="pbt"><div class="pbf" style="--c1:#4b5563;--c2:#6b7280;width:0%"></div></div><div class="pbfoot">0%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sh">Material Status — Key Items</div>
+  <div class="card">
+    <div class="chd">📦 Material Availability (P2-15,16)</div>
+    <table class="tbl">
+      <thead><tr><th>#</th><th>Material</th><th>UOM</th><th class="r">Manipal BOQ</th><th class="r">Manipal Recd</th><th class="r">Genisys BOQ</th><th class="r">Genisys Recd</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">1</td><td>HT ABC 3×120+1×95 sq.mm</td><td>m</td><td class="r vm mono">—</td><td class="r vm mono">—</td><td class="r mono">1,870</td><td class="r vg mono">1,931</td><td><span class="chip cg">✓ Complete</span></td></tr>
+        <tr><td class="mono">2</td><td>HT ABC 3×150+1×120 sq.mm</td><td>m</td><td class="r mono">28,330</td><td class="r vg mono">28,330</td><td class="r mono">45,628</td><td class="r vg mono">45,248</td><td><span class="chip cg">✓ Complete</span></td></tr>
+        <tr><td class="mono">3</td><td>CC ACSR 99 sq.mm (EN 50397)</td><td>m</td><td class="r mono">5,419</td><td class="r vg mono">5,377</td><td class="r vm mono">nil</td><td class="r vm mono">nil</td><td><span class="chip cg">✓ Complete</span></td></tr>
+        <tr><td class="mono">4</td><td>Pole PSC 9M</td><td>nos</td><td class="r mono">736</td><td class="r va mono">744</td><td class="r mono">772</td><td class="r va mono">746</td><td><span class="chip ca">In Progress</span></td></tr>
+        <tr><td class="mono">5</td><td>A Pole 11 m</td><td>nos</td><td class="r mono">51</td><td class="r vg mono">52</td><td class="r mono">15</td><td class="r vg mono">15</td><td><span class="chip cg">✓ Complete</span></td></tr>
+        <tr><td class="mono">6</td><td>AB Switch 11kV 400A</td><td>nos</td><td class="r mono">18</td><td class="r vr mono">—</td><td class="r mono">48</td><td class="r vr mono">0</td><td><span class="chip cr">Pending</span></td></tr>
+        <tr><td class="mono">7</td><td>11kV Pin Insulator (Polymeric)</td><td>nos</td><td class="r mono">317</td><td class="r vg mono">512</td><td class="r vm mono">—</td><td class="r vm mono">—</td><td><span class="chip cg">✓ Complete</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /physical -->
+
+<!-- ══ FINANCIAL ══ -->
+<div class="tab-panel" id="tab-financial">
+
+  <div class="sh">Financial KPIs — VTL Package (Live from Sheet)</div>
+  <div class="kg kg4">
+    <div class="kpi" style="--ac:var(--blue)">
+      <div class="ki">💰</div>
+      <div class="kv" id="fin-kv1">₹20.84<sup>Cr</sup></div>
+      <div class="kl">Supply Invoice Raised</div>
+      <div class="ks" id="fin-ks1">₹20,84,05,142</div>
+      <div class="kb"><div class="kbt"><div class="kbf" id="fin-kb1" style="width:36.29%;background:var(--blue)"></div></div>
+      <div class="kbfoot"><span id="fin-kbf1">36.29%</span><span>of ₹57.43 Cr survey amt</span></div></div>
+    </div>
+    <div class="kpi" style="--ac:var(--green)">
+      <div class="ki">⚙️</div>
+      <div class="kv" id="fin-kv2">2.73<sup>%</sup></div>
+      <div class="kl">Erection Progress</div>
+      <div class="ks" id="fin-ks2">₹38,64,224 erection value</div>
+      <div class="kb"><div class="kbt"><div class="kbf" id="fin-kb2" style="width:2.73%;background:var(--green)"></div></div>
+      <div class="kbfoot"><span id="fin-kbf2">2.73%</span><span>vs LOI erection value</span></div></div>
+    </div>
+    <div class="kpi" style="--ac:var(--amber)">
+      <div class="ki">💳</div>
+      <div class="kv">₹9.57<sup>Cr</sup></div>
+      <div class="kl">Supply Payment Effected</div>
+      <div class="ks">₹9,57,13,716</div>
+      <div class="kb"><div class="kbt"><div class="kbf" style="width:45.9%"></div></div>
+      <div class="kbfoot"><span>45.9%</span><span>of invoiced amount</span></div></div>
+    </div>
+    <div class="kpi" style="--ac:var(--purple)">
+      <div class="ki">🧾</div>
+      <div class="kv">₹4.16<sup>Cr</sup></div>
+      <div class="kl">Mobilization Advance</div>
+      <div class="ks">₹4,15,90,600.96</div>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <div class="chd">💹 Progress vs Targets</div>
+      <div class="cbody">
+        <div class="pb">
+          <div class="pbm"><span class="pbn">Supply Invoice vs Survey Amount</span><span class="pbv"><b id="fp1">36.29%</b></span></div>
+          <div class="pbt"><div class="pbf" id="fpb1" style="--c1:var(--blue);--c2:#60a5fa;width:36.29%"></div></div>
+          <div class="pbfoot">₹20.84 Cr invoiced of ₹57.43 Cr survey amount</div>
+        </div>
+        <div class="pb" style="margin-top:16px">
+          <div class="pbm"><span class="pbn">Erection Progress vs LOI Value</span><span class="pbv"><b id="fp2">2.73%</b></span></div>
+          <div class="pbt"><div class="pbf" id="fpb2" style="--c1:var(--green);--c2:#34d399;width:2.73%"></div></div>
+          <div class="pbfoot">Early stage — 97.27% remaining</div>
+        </div>
+        <div class="pb" style="margin-top:16px">
+          <div class="pbm"><span class="pbn">Payment Effected vs Invoiced</span><span class="pbv"><b>45.9%</b></span></div>
+          <div class="pbt"><div class="pbf" style="--c1:var(--amber);--c2:var(--amber2);width:45.9%"></div></div>
+          <div class="pbfoot">₹9.57 Cr paid of ₹20.84 Cr invoiced</div>
+        </div>
+        <div class="pb" style="margin-top:16px">
+          <div class="pbm"><span class="pbn">Overall Combined Progress</span><span class="pbv"><b>19.51%</b></span></div>
+          <div class="pbt"><div class="pbf" style="--c1:var(--purple);--c2:#a78bfa;width:19.51%"></div></div>
+          <div class="pbfoot">Supply + Erection blended: 19.51%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chd">🧾 Invoice-wise Payments Effected</div>
+      <table class="tbl">
+        <thead><tr><th>Invoice</th><th class="r">Amount (₹)</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">K-1</td><td class="r va mono">75,47,475</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-2</td><td class="r va mono">11,94,531</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-3</td><td class="r va mono">96,59,303</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-4</td><td class="r va mono">33,436</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-5</td><td class="r va mono">64,065</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-6</td><td class="r va mono">3,53,83,544</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-7</td><td class="r va mono">1,83,622</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-9</td><td class="r va mono">9,90,705</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-11</td><td class="r va mono">64,11,128</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-12</td><td class="r va mono">1,43,41,003</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-13</td><td class="r va mono">76,84,154</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-14</td><td class="r va mono">2,69,695</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-15</td><td class="r va mono">64,90,456</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-16</td><td class="r va mono">6,29,126</td><td><span class="chip cg">Paid</span></td></tr>
+          <tr><td class="mono">K-22 / K-23</td><td class="r vm">—</td><td><span class="chip ca">Processing</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /financial -->
+
+<!-- ══ WORKS ══ -->
+<div class="tab-panel" id="tab-works">
+
+  <div class="sh">Genisys (PKG-1) — Section Works Summary</div>
+  <div class="card">
+    <div class="chd">🟢 Genisys — 47/47 Works Complete (100%)</div>
+    <table class="tbl">
+      <thead><tr><th>Section</th><th class="r">Works</th><th class="r">Line Stringed (m)</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Changanassery</td><td class="r mono">6</td><td class="r va mono">7,433</td><td><span class="chip cg">✓ Done</span></td></tr>
+        <tr><td>Karukachal</td><td class="r mono">15</td><td class="r va mono">14,382</td><td><span class="chip cg">✓ Done</span></td></tr>
+        <tr><td>Manimala</td><td class="r mono">1</td><td class="r va mono">2,371</td><td><span class="chip cg">✓ Done</span></td></tr>
+        <tr><td>Pathanad</td><td class="r mono">5</td><td class="r va mono">3,330</td><td><span class="chip cg">✓ Done</span></td></tr>
+        <tr><td>Thengana</td><td class="r mono">1</td><td class="r va mono">420</td><td><span class="chip cg">✓ Done</span></td></tr>
+        <tr><td>Thrikkodithanam</td><td class="r mono">9</td><td class="r va mono">4,604</td><td><span class="chip cg">✓ Done</span></td></tr>
+        <tr><td>Kurichy</td><td class="r mono">10</td><td class="r va mono">8,651</td><td><span class="chip cg">✓ Done</span></td></tr>
+        <tr class="total"><td><b>Total</b></td><td class="r mono"><b>47</b></td><td class="r mono"><b>41,191</b></td><td><span class="chip cg">100% Complete</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sh">Manipal (PKG-3) — Works Detail</div>
+  <div class="card">
+    <div class="chd">🔄 Manipal — Pallom &amp; Vaikom (25 Done / 6 Pending)</div>
+    <table class="tbl">
+      <thead><tr><th>Work Name</th><th>Division</th><th>Section</th><th class="r">Distance (m)</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Amayannoor to spinning mill</td><td><span class="dtag dpa">Pallom</span></td><td>Ayarkunnam</td><td class="r mono">859</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Eepans to Parappuram</td><td><span class="dtag dpa">Pallom</span></td><td>Ayarkunnam</td><td class="r mono">1,386</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Ettupara to Chirapalam</td><td><span class="dtag dpa">Pallom</span></td><td>Ayarkunnam</td><td class="r mono">774</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>COVERED COND. Kottayam East</td><td><span class="dtag dpa">Pallom</span></td><td>Kottayam East</td><td class="r mono">868</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Kalingu to Housing Board</td><td><span class="dtag dpa">Pallom</span></td><td>Gandhinagar</td><td class="r mono">2,000</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Chemmanappady DTR to Attumali DTR</td><td><span class="dtag dpa">Pallom</span></td><td>Gandhinagar</td><td class="r mono">806</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Keechal church to Vennassery</td><td><span class="dtag dpa">Pallom</span></td><td>Puthupally</td><td class="r mono">627</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Janatha road to Kalambattukunnu</td><td><span class="dtag dpa">Pallom</span></td><td>Puthupally</td><td class="r mono">590</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Kochumattom School to Transformer</td><td><span class="dtag dpa">Pallom</span></td><td>Puthupally</td><td class="r mono">555</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Keezhettukunnu to Narakathodu</td><td><span class="dtag dpa">Pallom</span></td><td>Puthupally</td><td class="r mono">614</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Kavalichira to Adumbukadu</td><td><span class="dtag dpa">Pallom</span></td><td>Meenadom</td><td class="r mono">621</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Malarickal to Muttel</td><td><span class="dtag dpa">Pallom</span></td><td>Pallom Punja</td><td class="r mono">1,300</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>COVERED COND. Adithyapuram</td><td><span class="dtag dpa">Pallom</span></td><td>Pallom Punja</td><td class="r mono">851</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Kupumthara to Chatthenkunnu</td><td><span class="dtag dpa">Pallom</span></td><td>Kuruppanthara</td><td class="r mono">850</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Kanjirathanam to Kadam kuzhy</td><td><span class="dtag dpa">Pallom</span></td><td>Kuruppanthara</td><td class="r mono">546</td><td><span class="chip ca">Pending</span></td></tr>
+        <tr><td>Ettumanoor 110kV SS to Thavalakuzhi</td><td><span class="dtag dva">Vaikom</span></td><td>Ettumanoor</td><td class="r mono">2,210</td><td><span class="chip ca">Pending</span></td></tr>
+        <tr><td>Vikas Junction to Zion Junction</td><td><span class="dtag dva">Vaikom</span></td><td>Ettumanoor</td><td class="r mono">411</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Vikas Junction to Kattathi school</td><td><span class="dtag dva">Vaikom</span></td><td>Ettumanoor</td><td class="r mono">313</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Central Junction to KSRTC Bus stand</td><td><span class="dtag dva">Vaikom</span></td><td>Ettumanoor</td><td class="r mono">852</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Central Junction to Idikuzhi</td><td><span class="dtag dva">Vaikom</span></td><td>Ettumanoor</td><td class="r mono">1,080</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Chelechuvadu to Kayyoorickal</td><td><span class="dtag dva">Vaikom</span></td><td>Peruva</td><td class="r mono">490</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Kochuthattu to Thattinpuram Tower</td><td><span class="dtag dva">Vaikom</span></td><td>Peruva</td><td class="r mono">645</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Pulinchuvadu to Udayagiri</td><td><span class="dtag dva">Vaikom</span></td><td>Peruva</td><td class="r mono">1,322</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Thannimattom to Pulickalkunnu</td><td><span class="dtag dva">Vaikom</span></td><td>Peruva</td><td class="r mono">1,057</td><td><span class="chip ca">Pending</span></td></tr>
+        <tr><td>Pulickalkunnu to Palakkattupady</td><td><span class="dtag dva">Vaikom</span></td><td>Peruva</td><td class="r mono">1,130</td><td><span class="chip ca">Pending</span></td></tr>
+        <tr><td>Chungam AB to Enadi</td><td><span class="dtag dva">Vaikom</span></td><td>Chembu</td><td class="r mono">615</td><td><span class="chip ca">Pending</span></td></tr>
+        <tr><td>Chembankary to West</td><td><span class="dtag dva">Vaikom</span></td><td>Chembu</td><td class="r mono">809</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Thattil to Olippil</td><td><span class="dtag dva">Vaikom</span></td><td>Thalayolaparambu</td><td class="r mono">673</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Vellapally to Krishibhavan</td><td><span class="dtag dva">Vaikom</span></td><td>Neendoor</td><td class="r mono">865</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Mannakkanadu to Cherukombu</td><td><span class="dtag dva">Vaikom</span></td><td>Kuruvilangad</td><td class="r mono">911</td><td><span class="chip cg">Done</span></td></tr>
+        <tr><td>Edayazham Transformer</td><td><span class="dtag dva">Vaikom</span></td><td>Thalayazham</td><td class="r mono">129</td><td><span class="chip cg">Done</span></td></tr>
+        <tr class="total"><td colspan="3"><b>Total</b></td><td class="r mono"><b>24,943</b></td><td><span class="chip cg">25 Done</span> &nbsp;<span class="chip ca">6 Pending</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /works -->
+
+<!-- ══ SETTINGS ══ -->
+<div class="tab-panel" id="tab-settings">
+
+  <div class="sh">Live Data Connection</div>
+  <div class="scard">
+    <div style="font-size:13px;color:var(--text-dim);line-height:1.8;margin-bottom:16px">
+      This dashboard is <strong style="color:var(--green)">already connected</strong> to your Google Sheet.<br>
+      Sheet ID: <code style="background:var(--bg);padding:2px 8px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--amber)">1w1zgKD0yfowH_a_SrNpAIiu82bJNjcdZG4G0xEgEE9Y</code>
+    </div>
+    <div style="font-size:13px;color:var(--text-dim);line-height:1.8;margin-bottom:16px">
+      Click <strong style="color:var(--amber)">↺ Refresh Live Data</strong> (top-right) to pull latest figures from your sheet. To enable the live refresh button to work from your browser, the sheet needs to be <strong style="color:var(--text)">published to the web</strong>:
+    </div>
+    <ol style="margin:0 0 0 20px;font-size:13px;color:var(--text-dim);line-height:2.2">
+      <li>Open your Google Sheet → <strong style="color:var(--text)">File → Share → Publish to web</strong></li>
+      <li>Select <strong style="color:var(--text)">Entire Document</strong> → <strong style="color:var(--text)">Web page</strong> → click <strong style="color:var(--amber)">Publish</strong></li>
+      <li>Once published, the <strong style="color:var(--amber)">Refresh</strong> button will pull live data every time you click it</li>
+    </ol>
+    <div style="margin-top:16px">
+      <button class="sbtn" onclick="refreshData()">↺ Refresh Now</button>
+      <span id="conn-result" style="margin-left:12px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-muted)"></span>
+    </div>
+  </div>
+
+  <div class="sh">Dashboard Info</div>
+  <div class="card">
+    <div class="chd">ℹ️ About</div>
+    <table class="tbl">
+      <tbody>
+        <tr><td class="vm mono" style="width:160px">SCHEME</td><td>Revamped Distribution Sector Scheme (RDSS)</td></tr>
+        <tr><td class="vm mono">CIRCLE</td><td>Kottayam, Kerala</td></tr>
+        <tr><td class="vm mono">UTILITY</td><td>KSEB Ltd</td></tr>
+        <tr><td class="vm mono">DATA DATE</td><td class="va">06 April 2026 (Live)</td></tr>
+        <tr><td class="vm mono">TOTAL WORKS</td><td>212 (VTL) &nbsp;|&nbsp; 47 (Genisys) &nbsp;|&nbsp; 31 (Manipal)</td></tr>
+        <tr><td class="vm mono">SECTIONS ACTIVE</td><td>6 of 31 sections</td></tr>
+        <tr><td class="vm mono">SHEET ID</td><td class="mono" style="font-size:11px">1w1zgKD0yfowH_a_SrNpAIiu82bJNjcdZG4G0xEgEE9Y</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /settings -->
+
+</div><!-- /content -->
+</div><!-- /layout -->
+
+<script>
+// ── Your Google Sheet ID is hardcoded here ──
+const SHEET_ID = '1w1zgKD0yfowH_a_SrNpAIiu82bJNjcdZG4G0xEgEE9Y';
+
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+  document.getElementById('content').scrollTo(0, 0);
+}
+
+async function refreshData() {
+  const btn = document.getElementById('rbtn');
+  const lbl = document.getElementById('rlbl');
+  const icon = document.getElementById('ri');
+  btn.classList.add('loading');
+  lbl.textContent = 'Fetching…';
+
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Overview&t=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const json = JSON.parse(text.replace(/^[^(]+\(/, '').replace(/\);?\s*$/, ''));
+
+    if (json.status === 'ok') {
+      parseAndUpdate(json.table);
+      document.getElementById('upd-time').textContent = new Date().toLocaleString('en-IN', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) + ' (Live)';
+      document.getElementById('upd-status').innerHTML = '<span class="dot"></span> &nbsp;LIVE — Updated just now';
+      document.getElementById('upd-status').className = 'update-status status-live';
+      const cr = document.getElementById('conn-result');
+      if (cr) { cr.textContent = '✓ Live data loaded successfully'; cr.style.color = 'var(--green)'; }
+    } else throw new Error('Sheet error');
+
+  } catch(e) {
+    document.getElementById('upd-status').textContent = '⚠ Could not reach sheet — showing last known data';
+    document.getElementById('upd-status').className = 'update-status status-offline';
+    const cr = document.getElementById('conn-result');
+    if (cr) { cr.textContent = '✗ ' + e.message + ' — publish the sheet first (see instructions above)'; cr.style.color = 'var(--red)'; }
+  }
+
+  btn.classList.remove('loading');
+  lbl.textContent = 'Refresh Live Data';
+}
+
+function parseAndUpdate(table) {
+  const rows = (table.rows || []).map(r => (r.c||[]).map(c => c ? c.v : null));
+
+  // Row 11 (index 10): poles 8m=col1, 9m=col2, total=col6
+  // Row 12 (index 11): supply%=col8, erection%=col10
+  // Row 14 (index 13): supply val=col11
+  // Row 15 (index 14): RC HT ABC=col5
+
+  const r11 = rows[10] || [];
+  const r12 = rows[11] || [];
+  const r14 = rows[13] || [];
+  const r15 = rows[14] || [];
+
+  const poles8 = num(r11[1]); const poles9 = num(r11[2]); const polesT = num(r11[6]);
+  const supplyPct = parseFloat((r12[8]||'').toString().replace('%','')) || 36.29;
+  const erePct = parseFloat((r12[10]||'').toString().replace('%','')) || 2.73;
+  const supplyVal = r14[11] ? r14[11].toString().replace(/[₹,\s]/g,'') : '208405142';
+  const rchtabc = num(r15[5]);
+
+  // Update KPIs
+  set('kv-poles', Math.round(polesT));
+  set('ks-poles', `8m: ${Math.round(poles8)} &nbsp;|&nbsp; 9m: ${Math.round(poles9)}`);
+  const polesPct = (polesT/9202*100).toFixed(1);
+  setW('kb-poles', polesPct + '%');
+  set('kbf-poles', polesPct + '%');
+
+  const supCr = (parseFloat(supplyVal)/1e7).toFixed(2);
+  set('kv-supply', `₹${supCr}<sup>Cr</sup>`);
+  setW('kb-supply', Math.min(100,supplyPct).toFixed(2) + '%');
+  set('kbf-supply', supplyPct.toFixed(2) + '%');
+
+  set('kv-erection', erePct.toFixed(2) + '<sup>%</sup>');
+  setW('kb-erection', Math.min(100,erePct).toFixed(2) + '%');
+  set('kbf-erection', erePct.toFixed(2) + '%');
+
+  set('cc-poles', Math.round(polesT));
+  set('cc-supply', supplyPct.toFixed(2) + '%');
+
+  // Update financial
+  set('fin-kv1', `₹${supCr}<sup>Cr</sup>`);
+  set('fin-ks1', '₹' + fmt(parseFloat(supplyVal)));
+  setW('fin-kb1', Math.min(100,supplyPct) + '%');
+  set('fin-kbf1', supplyPct.toFixed(2) + '%');
+  set('fin-kv2', erePct.toFixed(2) + '<sup>%</sup>');
+  setW('fin-kb2', Math.min(100,erePct) + '%');
+  set('fin-kbf2', erePct.toFixed(2) + '%');
+  set('fp1', supplyPct.toFixed(2) + '%');
+  setW('fpb1', Math.min(100,supplyPct) + '%');
+  set('fp2', erePct.toFixed(2) + '%');
+  setW('fpb2', Math.min(100,erePct) + '%');
+
+  // RC HT ABC line
+  if (rchtabc > 0) {
+    set('pb-rchtabc', rchtabc.toFixed(2));
+    const p = (rchtabc/15.866*100).toFixed(1);
+    setW('pbf-rchtabc', p + '%');
+    set('pbfoot-rchtabc', p + '%');
+  }
+
+  // Line KPI
+  const lineTotal = 0.55 + rchtabc + 3.163;
+  set('kv-line', lineTotal.toFixed(2) + '<sup>km</sup>');
+  set('ks-line', `HT ABC: ${(0.55+rchtabc).toFixed(2)} km | LT ABC: 3.16 km`);
+  const linePct = (lineTotal/503*100).toFixed(2);
+  setW('kb-line', linePct + '%');
+  set('kbf-line', linePct + '%');
+
+  // Pole table
+  set('tp-8m', Math.round(poles8)); set('tp-9m', Math.round(poles9)); set('tp-total', Math.round(polesT));
+
+  // Status text
+  set('vtl-status', `Supply ${supplyPct.toFixed(2)}% · Erection ${erePct.toFixed(2)}% · 6 Sections active`);
+}
+
+function set(id, val) { const el = document.getElementById(id); if (el) el.innerHTML = val; }
+function setW(id, w) { const el = document.getElementById(id); if (el) el.style.width = w; }
+function num(v, d=0) { if (v===null||v===undefined||v==='') return d; return typeof v==='number'?v:(parseFloat(v)||d); }
+function fmt(n) { return Math.round(n).toLocaleString('en-IN'); }
+
+// Auto-refresh on load (tries live, silently falls back)
+window.addEventListener('DOMContentLoaded', () => { refreshData(); });
+</script>
+</body>
+</html>
